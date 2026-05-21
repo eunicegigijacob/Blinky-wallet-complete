@@ -6,4 +6,4 @@ Reference implementation that includes:
 - Webhook status updates and idempotency protection.
 - Frontend polling with success popup.
 - Expansion-ready provider interfaces.
-- Add-ons for off-ramp and advanced product tracks.
+
