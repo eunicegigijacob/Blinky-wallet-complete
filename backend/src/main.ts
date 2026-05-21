@@ -16,10 +16,8 @@ async function bootstrap() {
   });
   await app.listen(port);
 
-  const appUrl = (await app.getUrl()).replace("[::1]", "localhost");
-
   console.log("DB connected");
-  console.log(`server running on: ${appUrl}/api/v1`);
+  console.log(`server running on: http://localhost:${port}`);
 }
 
 bootstrap();
