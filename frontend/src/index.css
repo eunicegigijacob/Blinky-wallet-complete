@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background-image:
+    radial-gradient(60% 50% at 12% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
+    radial-gradient(45% 45% at 95% 5%, rgba(56, 189, 248, 0.14), transparent 60%),
+    radial-gradient(55% 55% at 50% 110%, rgba(236, 72, 153, 0.10), transparent 60%);
+  background-attachment: fixed;
+}
+
+.card {
+  @apply rounded-2xl border border-slate-800 bg-slate-900/70 backdrop-blur;
+  box-shadow: 0 10px 40px -20px rgba(15, 23, 42, 0.8);
+}
+
+.card-hover {
+  @apply transition-all duration-300 ease-out hover:border-indigo-500/50 hover:bg-slate-900/90;
+  @apply hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-30px_rgba(99,102,241,0.55)];
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-500 px-5 py-2.5;
+  @apply text-sm font-medium text-white shadow-lg shadow-indigo-500/20;
+  @apply transition-all duration-200 ease-out;
+  @apply hover:bg-indigo-400 hover:shadow-indigo-500/40 active:scale-[0.98];
+  @apply disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-indigo-500;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-5 py-2.5;
+  @apply text-sm font-medium text-slate-200;
+  @apply transition-all duration-200 ease-out;
+  @apply hover:border-slate-600 hover:bg-slate-800/70 active:scale-[0.98];
+  @apply disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.btn-danger {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-rose-500 px-5 py-2.5;
+  @apply text-sm font-medium text-white shadow-lg shadow-rose-500/20;
+  @apply transition-all duration-200 ease-out;
+  @apply hover:bg-rose-400 hover:shadow-rose-500/40 active:scale-[0.98];
+  @apply disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.input-base {
+  @apply w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100;
+  @apply outline-none transition-colors duration-200;
+  @apply placeholder:text-slate-500;
+  @apply focus:border-indigo-500/70 focus:ring-2 focus:ring-indigo-500/30;
+}
+
+.glow-ring {
+  position: relative;
+}
+.glow-ring::after {
+  content: "";
+  @apply absolute -inset-px rounded-2xl;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), transparent 50%, rgba(56, 189, 248, 0.25));
+  z-index: -1;
+  filter: blur(14px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6) 0%,
+    rgba(165, 180, 252, 1) 35%,
+    rgba(125, 211, 252, 1) 50%,
+    rgba(165, 180, 252, 1) 65%,
+    rgba(226, 232, 240, 0.6) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
+}
