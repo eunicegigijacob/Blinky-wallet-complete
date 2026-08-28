@@ -119,15 +119,15 @@ See [docs/failure-scenarios.md](docs/failure-scenarios.md).
 
 ## API
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/api/v1/invoices` | Create a Lightning invoice |
-| `GET` | `/api/v1/invoices/:invoiceId` | Read payment status |
-| `POST` | `/api/v1/payments/decode` | Decode a bolt11 invoice |
-| `POST` | `/api/v1/payments/pay` | Pay an invoice via Blink |
-| `GET` | `/api/v1/payments` | Payment history |
-| `POST` | `/api/v1/webhooks/blink` | Blink/Svix webhook |
-| `GET` | `/api/v1/health` | Health + Mongo ping |
+| Method | Path                          | Purpose                    |
+| ------ | ----------------------------- | -------------------------- |
+| `POST` | `/api/v1/invoices`            | Create a Lightning invoice |
+| `GET`  | `/api/v1/invoices/:invoiceId` | Read payment status        |
+| `POST` | `/api/v1/payments/decode`     | Decode a bolt11 invoice    |
+| `POST` | `/api/v1/payments/pay`        | Pay an invoice via Blink   |
+| `GET`  | `/api/v1/payments`            | Payment history            |
+| `POST` | `/api/v1/webhooks/blink`      | Blink/Svix webhook         |
+| `GET`  | `/api/v1/health`              | Health + Mongo ping        |
 
 Swagger UI: [http://localhost:4001/api/docs](http://localhost:4001/api/docs)
 
@@ -168,17 +168,17 @@ Mock mode (`PAYMENT_PROVIDER=mock`, or empty `BLINK_API_KEY`) creates invoices w
 
 Defined in `.env.example`:
 
-| Variable | Purpose |
-| --- | --- |
-| `MONGO_URI` | MongoDB connection string |
-| `BLINK_API_URL` | Blink GraphQL endpoint |
-| `BLINK_API_KEY` | Blink API key |
-| `BLINK_WALLET_ID` | Blink wallet to receive/send from |
-| `BLINK_WEBHOOK_SECRET` | Svix signing secret (`whsec_…`) |
-| `API_PORT` | NestJS port (default `4001`) |
-| `PAYMENT_PROVIDER` | `mock` or `blink` |
-| `FRONTEND_ORIGIN` | Allowed CORS origin |
-| `VITE_API_BASE_URL` | Frontend API base URL |
+| Variable               | Purpose                           |
+| ---------------------- | --------------------------------- |
+| `MONGO_URI`            | MongoDB connection string         |
+| `BLINK_API_URL`        | Blink GraphQL endpoint            |
+| `BLINK_API_KEY`        | Blink API key                     |
+| `BLINK_WALLET_ID`      | Blink wallet to receive/send from |
+| `BLINK_WEBHOOK_SECRET` | Svix signing secret (`whsec_…`)   |
+| `API_PORT`             | NestJS port (default `4001`)      |
+| `PAYMENT_PROVIDER`     | `mock` or `blink`                 |
+| `FRONTEND_ORIGIN`      | Allowed CORS origin               |
+| `VITE_API_BASE_URL`    | Frontend API base URL             |
 
 Never commit `.env`. Secrets are not logged.
 
@@ -223,11 +223,3 @@ Tests use `MockPaymentProvider` and in-memory MongoDB. They do not need Blink cr
 ![Payment received](docs/screenshots/04-payment-received.png)
 
 ![Transaction history](docs/screenshots/05-transaction-history.png)
-
-## GitHub
-
-Suggested repository description:
-
-> Lightning payment wallet demonstrating Blink integration, asynchronous payment confirmation, webhook reliability, idempotency, and payment state management.
-
-Suggested topics: `typescript`, `nestjs`, `bitcoin`, `lightning`, `payments`, `fintech`, `webhooks`, `idempotency`, `docker`.
