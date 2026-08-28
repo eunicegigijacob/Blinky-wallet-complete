@@ -24,10 +24,10 @@ export function SuccessPopup({
             transition={{ duration: 0.2 }}
           >
             <p className="text-2xl font-semibold text-emerald-300">
-              Payment Received
+              Payment received
             </p>
             <p className="mt-2 text-sm text-slate-300">
-              incoming transaction! invoice payment has been confirmed!
+              The Lightning invoice has been confirmed.
             </p>
             <button
               className="px-4 py-2 mt-5 text-sm font-medium rounded-lg bg-emerald-500 text-slate-950"

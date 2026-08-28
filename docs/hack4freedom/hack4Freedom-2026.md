@@ -1,8 +1,8 @@
 # Hack4Freedom 2026 — Local Setup Guide
 
-This guide walks you through everything you need to run the **Blinky Lightning Wallet** repo locally — from installing Node.js and Git, to starting the backend API, frontend app, and database.
+This is historical workshop material from Hack4Freedom 2026. The current project README is the source of truth for running Blinky.
 
-> **Note:** A **starter repo** will be shared during class. Use that repo as your working copy for the hackathon. This document describes the same setup for both the starter repo and the complete reference implementation (`remit-lightning-complete`).
+> **Note:** A **starter repo** was shared during class. This document describes local setup for both the starter repo and the complete reference implementation.
 
 ---
 

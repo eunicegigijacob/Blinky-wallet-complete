@@ -1,4 +1,4 @@
-import { DecodedInvoice, InvoiceRecord, PaymentResult, WalletBalance } from "../types";
+import { DecodedInvoice, InvoiceRecord, WalletBalance } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -9,8 +9,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || "Request failed");
+    let message = "Request failed";
+    try {
+      const body = (await response.json()) as { message?: string | string[] };
+      if (Array.isArray(body.message)) {
+        message = body.message.join(", ");
+      } else if (body.message) {
+        message = body.message;
+      }
+    } catch {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
   }
   return (await response.json()) as T;
 }
@@ -29,8 +39,8 @@ export const api = {
   getInvoice(invoiceId: string) {
     return request<InvoiceRecord>(`/invoices/${invoiceId}`);
   },
-  listTransfers() {
-    return request<InvoiceRecord[]>("/transfers");
+  listPayments() {
+    return request<InvoiceRecord[]>("/payments");
   },
   decodeInvoice(paymentRequest: string) {
     return request<DecodedInvoice>("/payments/decode", {
@@ -38,10 +48,10 @@ export const api = {
       body: JSON.stringify({ paymentRequest }),
     });
   },
-  payInvoice(paymentRequest: string, simulateFailure = false) {
-    return request<PaymentResult>("/payments/pay", {
+  payInvoice(paymentRequest: string) {
+    return request<InvoiceRecord>("/payments/pay", {
       method: "POST",
-      body: JSON.stringify({ paymentRequest, simulateFailure }),
+      body: JSON.stringify({ paymentRequest }),
     });
   },
   getWalletBalance() {

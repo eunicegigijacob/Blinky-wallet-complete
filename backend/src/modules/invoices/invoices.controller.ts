@@ -1,38 +1,31 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { ApiOkResponse, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
 import { InvoicesService } from "./invoices.service";
 import { CreateInvoiceDto } from "./dto/create-invoice.dto";
 
+const INVOICE_ID = /^pay_[a-zA-Z0-9]+$/;
+
+@ApiTags("invoices")
 @Controller("invoices")
 export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}
 
   @Post()
+  @ApiOperation({ summary: "Create a Lightning invoice" })
+  @ApiOkResponse({
+    description: "Pending incoming payment with bolt11 invoice and identifier",
+  })
   create(@Body() payload: CreateInvoiceDto) {
     return this.invoicesService.createInvoice(payload);
   }
 
   @Get(":invoiceId")
+  @ApiOperation({ summary: "Get invoice / payment status" })
+  @ApiParam({ name: "invoiceId", example: "pay_ab12cd34ef56" })
   getOne(@Param("invoiceId") invoiceId: string) {
+    if (!INVOICE_ID.test(invoiceId)) {
+      throw new BadRequestException("Invalid payment identifier");
+    }
     return this.invoicesService.getInvoice(invoiceId);
-  }
-
-  @Get(":invoiceId/qr")
-  async getQr(@Param("invoiceId") invoiceId: string) {
-    const invoice = await this.invoicesService.getInvoice(invoiceId);
-    return { qrPayload: invoice.qrPayload };
-  }
-
-  @Post(":invoiceId/resend-notification")
-  resendNotification(@Param("invoiceId") invoiceId: string) {
-    return {
-      invoiceId,
-      delivered: true,
-      note: "Notification flow placeholder for complete repo extension.",
-    };
-  }
-
-  @Post(":invoiceId/expire")
-  expire(@Param("invoiceId") invoiceId: string) {
-    return this.invoicesService.expireInvoice(invoiceId);
   }
 }

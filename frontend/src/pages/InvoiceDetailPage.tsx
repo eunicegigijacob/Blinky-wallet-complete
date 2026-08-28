@@ -1,69 +1,72 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { motion } from "framer-motion";
 import { MotionPage } from "../components/MotionPage";
 import { StatusBadge } from "../components/StatusBadge";
 import { SuccessPopup } from "../components/SuccessPopup";
-import { api } from "../lib/api";
-import { InvoiceRecord } from "../types";
+import { usePaymentPolling } from "../hooks/usePaymentPolling";
+
+function statusCopy(status: string | undefined) {
+  switch (status) {
+    case "PENDING":
+      return "Waiting for payment...";
+    case "PAID":
+      return "Payment received";
+    case "EXPIRED":
+      return "Invoice expired";
+    case "FAILED":
+      return "Payment failed";
+    default:
+      return "Loading invoice...";
+  }
+}
 
 export function InvoiceDetailPage() {
   const { invoiceId = "" } = useParams();
-  const [invoice, setInvoice] = useState<InvoiceRecord | null>(null);
+  const { payment, error, timedOut, retry } = usePaymentPolling(invoiceId);
   const [copied, setCopied] = useState(false);
-  const [popupVisible, setPopupVisible] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const previousStatus = useRef<string | null>(null);
+  const [popupClosed, setPopupClosed] = useState(false);
+  const sawPaid = useRef(false);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const load = async () => {
-      try {
-        const current = await api.getInvoice(invoiceId);
-        if (!mounted) return;
-        if (previousStatus.current !== "paid" && current.status === "paid") {
-          setPopupVisible(true);
-        }
-        previousStatus.current = current.status;
-        setInvoice(current);
-      } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : "Failed to load invoice");
-        }
-      }
-    };
-
-    void load();
-    const interval = setInterval(load, 3000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [invoiceId]);
+  if (payment?.status === "PAID") {
+    sawPaid.current = true;
+  }
 
   const copyInvoice = async () => {
-    if (!invoice) return;
-    await navigator.clipboard.writeText(invoice.paymentRequest);
+    if (!payment) return;
+    await navigator.clipboard.writeText(payment.paymentRequest);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };
 
-  if (error) {
-    return <p className="text-rose-300">{error}</p>;
+  if (error && !payment) {
+    return (
+      <MotionPage>
+        <div className="card mx-auto max-w-xl space-y-4 p-8">
+          <p className="text-rose-300">{error}</p>
+          <button className="btn-primary" onClick={retry} type="button">
+            Try again
+          </button>
+        </div>
+      </MotionPage>
+    );
   }
 
-  if (!invoice) {
-    return <p className="text-slate-300">Loading invoice...</p>;
+  if (!payment) {
+    return (
+      <MotionPage>
+        <p className="text-slate-300">Loading invoice...</p>
+      </MotionPage>
+    );
   }
 
   return (
     <MotionPage>
       <div className="card mx-auto max-w-2xl space-y-6 p-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Invoice #{invoice.invoiceId}</h1>
-          <StatusBadge status={invoice.status} />
+          <h1 className="text-2xl font-semibold">Invoice #{payment.invoiceId}</h1>
+          <StatusBadge status={payment.status} />
         </div>
 
         <motion.div
@@ -73,31 +76,51 @@ export function InvoiceDetailPage() {
           transition={{ duration: 0.25 }}
         >
           <div className="mx-auto rounded-xl bg-white p-3 md:mx-0">
-            <QRCodeSVG value={invoice.qrPayload} size={190} />
+            <QRCodeSVG value={payment.qrPayload} size={190} />
           </div>
           <div className="min-w-0 space-y-3">
             <p className="text-sm text-slate-300">Scan or copy the invoice below.</p>
             <pre className="max-w-full whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-3 font-mono text-xs text-slate-300">
-              {invoice.paymentRequest}
+              {payment.paymentRequest}
             </pre>
-            {invoice.status === "paid" ? (
+            {payment.status === "PAID" ? (
               <Link to="/history" className="btn-primary">
                 View Transactions
               </Link>
             ) : (
-              <button onClick={copyInvoice} className="btn-primary">
+              <button onClick={copyInvoice} className="btn-primary" type="button">
                 {copied ? "Copied" : "Copy Invoice"}
               </button>
             )}
-            <p className={invoice.status === "waiting_for_payment" ? "animate-pulse text-amber-300 text-xs" : "text-xs text-slate-300"}>
-              {invoice.status === "waiting_for_payment"
-                ? "Waiting for webhook-confirmed payment..."
-                : `Updated status: ${invoice.status}`}
+            <p
+              className={
+                payment.status === "PENDING"
+                  ? "animate-pulse text-amber-300 text-xs"
+                  : "text-xs text-slate-300"
+              }
+            >
+              {statusCopy(payment.status)}
             </p>
+            {error ? (
+              <div className="space-y-2">
+                <p className="text-sm text-rose-300">{error}</p>
+                <button className="btn-secondary" onClick={retry} type="button">
+                  Try again
+                </button>
+              </div>
+            ) : null}
+            {timedOut && payment.status === "PENDING" ? (
+              <p className="text-sm text-rose-300">
+                Unable to check payment status. Please try again.
+              </p>
+            ) : null}
           </div>
         </motion.div>
       </div>
-      <SuccessPopup show={popupVisible} onClose={() => setPopupVisible(false)} />
+      <SuccessPopup
+        show={sawPaid.current && !popupClosed}
+        onClose={() => setPopupClosed(true)}
+      />
     </MotionPage>
   );
 }

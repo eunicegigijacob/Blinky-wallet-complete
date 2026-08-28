@@ -81,7 +81,7 @@ export function CreateInvoicePage() {
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
         <button className="btn-primary w-full" type="submit" disabled={loading}>
-          {loading ? "Creating…" : "Create invoice"}
+          {loading ? "Creating your Lightning invoice..." : "Create invoice"}
         </button>
       </form>
     </MotionPage>

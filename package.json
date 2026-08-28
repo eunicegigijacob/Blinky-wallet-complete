@@ -1,16 +1,19 @@
 {
-  "name": "remit-lightning-complete",
+  "name": "blinky-wallet",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "workspaces": [
     "frontend",
     "backend"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w @remit-complete/api\" \"npm run dev -w @remit-complete/web\"",
-    "dev:web": "npm run dev -w @remit-complete/web",
-    "dev:api": "npm run dev -w @remit-complete/api",
-    "build": "npm run build -w @remit-complete/web && npm run build -w @remit-complete/api"
+    "dev": "concurrently -n api,web -c blue,green \"npm run start:dev -w @blinky/api\" \"npm run dev -w @blinky/web\"",
+    "dev:web": "npm run dev -w @blinky/web",
+    "dev:api": "npm run start:dev -w @blinky/api",
+    "build": "npm run build -w @blinky/web && npm run build -w @blinky/api",
+    "lint": "npm run lint -w @blinky/api && npm run lint -w @blinky/web",
+    "test": "npm test -w @blinky/api && npm test -w @blinky/web",
+    "test:e2e": "npm run test:e2e -w @blinky/api"
   },
   "devDependencies": {
     "concurrently": "^9.0.1"

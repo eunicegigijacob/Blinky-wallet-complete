@@ -1,10 +1,17 @@
-import { Injectable, Logger } from "@nestjs/common";
 import {
-  CreateLightningInvoiceInput,
-  CreateLightningInvoiceOutput,
-  LightningProvider,
+  GatewayTimeoutException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from "@nestjs/common";
+import {
+  CreateInvoiceInput,
+  CreateInvoiceResult,
+  PaymentProvider,
+  PayInvoiceResult,
+  ProviderPaymentStatus,
   WalletBalanceOutput,
-} from "./lightning-provider.interface";
+} from "./payment-provider.interface";
 
 type WalletCurrency = "BTC" | "USD";
 
@@ -17,7 +24,7 @@ interface BlinkWallet {
 interface BlinkInvoice {
   paymentRequest: string;
   paymentHash: string;
-  paymentSecret: string;
+  paymentSecret?: string;
   satoshis?: number;
 }
 
@@ -31,6 +38,8 @@ interface GraphqlResponse<T> {
   data?: T;
   errors?: BlinkGraphqlError[];
 }
+
+const PROVIDER_TIMEOUT_MS = 15_000;
 
 const ME_WALLETS_QUERY = `
   query Me {
@@ -82,18 +91,40 @@ const LN_USD_INVOICE_CREATE_MUTATION = `
   }
 `;
 
+const LN_INVOICE_STATUS_QUERY = `
+  query LnInvoicePaymentStatusByHash($input: LnInvoicePaymentStatusByHashInput!) {
+    lnInvoicePaymentStatusByHash(input: $input) {
+      paymentHash
+      status
+    }
+  }
+`;
+
+const LN_INVOICE_PAYMENT_SEND = `
+  mutation LnInvoicePaymentSend($input: LnInvoicePaymentInput!) {
+    lnInvoicePaymentSend(input: $input) {
+      status
+      transaction {
+        id
+        initiationVia {
+          paymentHash
+        }
+      }
+      errors {
+        message
+        path
+        code
+      }
+    }
+  }
+`;
+
 @Injectable()
-export class BlinkLightningProvider implements LightningProvider {
-  private readonly logger = new Logger(BlinkLightningProvider.name);
+export class BlinkProvider implements PaymentProvider {
+  private readonly logger = new Logger(BlinkProvider.name);
   private cachedWalletCurrency: WalletCurrency | null = null;
 
-  async createInvoice(
-    input: CreateLightningInvoiceInput,
-  ): Promise<CreateLightningInvoiceOutput> {
-    if (!this.isLiveMode()) {
-      return this.mockInvoice(input);
-    }
-
+  async createInvoice(input: CreateInvoiceInput): Promise<CreateInvoiceResult> {
     const walletId = this.requireEnv("BLINK_WALLET_ID");
     const walletCurrency = await this.resolveWalletCurrency(walletId);
     const expiresInMinutes = 15;
@@ -116,42 +147,74 @@ export class BlinkLightningProvider implements LightningProvider {
       paymentRequest: invoice.paymentRequest,
       paymentHash: invoice.paymentHash,
       expiresAt: new Date(Date.now() + expiresInMinutes * 60 * 1000),
+      currency: walletCurrency,
+    };
+  }
+
+  async getPaymentStatus(paymentHash: string): Promise<ProviderPaymentStatus> {
+    const response = await this.gqlRequest<{
+      lnInvoicePaymentStatusByHash: {
+        paymentHash?: string;
+        status?: string;
+      };
+    }>(LN_INVOICE_STATUS_QUERY, { input: { paymentHash } });
+
+    return this.mapInvoiceStatus(
+      response.lnInvoicePaymentStatusByHash?.status,
+    );
+  }
+
+  async payInvoice(paymentRequest: string): Promise<PayInvoiceResult> {
+    const walletId = this.requireEnv("BLINK_WALLET_ID");
+    const response = await this.gqlRequest<{
+      lnInvoicePaymentSend: {
+        status?: string;
+        transaction?: {
+          id?: string;
+          initiationVia?: { paymentHash?: string };
+        };
+        errors?: BlinkGraphqlError[];
+      };
+    }>(LN_INVOICE_PAYMENT_SEND, {
+      input: { walletId, paymentRequest },
+    });
+
+    const payload = response.lnInvoicePaymentSend;
+    if (payload.errors && payload.errors.length > 0) {
+      throw new ServiceUnavailableException("Lightning provider request failed");
+    }
+
+    const providerPaymentId =
+      payload.transaction?.initiationVia?.paymentHash ??
+      payload.transaction?.id ??
+      `blink_pay_${Date.now()}`;
+
+    return {
+      status: this.mapSendStatus(payload.status),
+      providerPaymentId,
     };
   }
 
   async health() {
-    if (!this.isLiveMode()) {
-      return { provider: "blink", ok: true, mode: "mock" } as const;
-    }
-
     try {
       const wallets = await this.fetchWallets();
       const walletId = process.env.BLINK_WALLET_ID;
       const ok = walletId
         ? wallets.some((wallet) => wallet.id === walletId)
         : wallets.length > 0;
-      return { provider: "blink", ok, mode: "live" } as const;
+      return { provider: "blink", ok, mode: "live" as const };
     } catch (error) {
       this.logger.error(
         `Blink health check failed: ${(error as Error).message}`,
       );
-      return { provider: "blink", ok: false, mode: "live" } as const;
+      return { provider: "blink", ok: false, mode: "live" as const };
     }
   }
 
   async getWalletBalance(): Promise<WalletBalanceOutput> {
-    if (!this.isLiveMode()) {
-      return {
-        walletId: process.env.BLINK_WALLET_ID ?? "mock_wallet",
-        walletCurrency: "BTC",
-        balance: 250_000,
-        mode: "mock",
-      };
-    }
-
     const wallets = await this.fetchWallets();
     if (wallets.length === 0) {
-      throw new Error("Blink returned no wallets for the account");
+      throw new ServiceUnavailableException("Lightning provider returned no wallets");
     }
 
     const configuredWalletId = process.env.BLINK_WALLET_ID;
@@ -166,6 +229,33 @@ export class BlinkLightningProvider implements LightningProvider {
       balance: wallet.balance,
       mode: "live",
     };
+  }
+
+  private mapInvoiceStatus(status?: string): ProviderPaymentStatus {
+    switch ((status ?? "").toUpperCase()) {
+      case "PAID":
+        return "PAID";
+      case "EXPIRED":
+        return "EXPIRED";
+      case "FAILED":
+      case "FAILURE":
+        return "FAILED";
+      default:
+        return "PENDING";
+    }
+  }
+
+  private mapSendStatus(status?: string): ProviderPaymentStatus {
+    switch ((status ?? "").toUpperCase()) {
+      case "SUCCESS":
+      case "ALREADY_PAID":
+        return "PAID";
+      case "FAILURE":
+      case "FAILED":
+        return "FAILED";
+      default:
+        return "PENDING";
+    }
   }
 
   private async createBtcInvoice(variables: {
@@ -186,7 +276,6 @@ export class BlinkLightningProvider implements LightningProvider {
     return this.unwrapInvoice(
       response.lnInvoiceCreate.invoice,
       response.lnInvoiceCreate.errors,
-      "lnInvoiceCreate",
     );
   }
 
@@ -208,28 +297,23 @@ export class BlinkLightningProvider implements LightningProvider {
     return this.unwrapInvoice(
       response.lnUsdInvoiceCreate.invoice,
       response.lnUsdInvoiceCreate.errors,
-      "lnUsdInvoiceCreate",
     );
   }
 
   private unwrapInvoice(
     invoice: BlinkInvoice | null,
     errors: BlinkGraphqlError[] | undefined,
-    operation: string,
   ): BlinkInvoice {
     if (errors && errors.length > 0) {
-      const message = errors.map((err) => err.message).join("; ");
-      throw new Error(`Blink ${operation} returned errors: ${message}`);
+      throw new ServiceUnavailableException("Lightning provider request failed");
     }
     if (!invoice) {
-      throw new Error(`Blink ${operation} returned no invoice`);
+      throw new ServiceUnavailableException("Lightning provider returned no invoice");
     }
     return invoice;
   }
 
-  private async resolveWalletCurrency(
-    walletId: string,
-  ): Promise<WalletCurrency> {
+  private async resolveWalletCurrency(walletId: string): Promise<WalletCurrency> {
     if (this.cachedWalletCurrency) {
       return this.cachedWalletCurrency;
     }
@@ -237,9 +321,7 @@ export class BlinkLightningProvider implements LightningProvider {
     const wallets = await this.fetchWallets();
     const match = wallets.find((wallet) => wallet.id === walletId);
     if (!match) {
-      throw new Error(
-        `Configured BLINK_WALLET_ID does not match any wallet on the account`,
-      );
+      throw new ServiceUnavailableException("Configured Blink wallet was not found");
     }
     this.cachedWalletCurrency = match.walletCurrency;
     return match.walletCurrency;
@@ -259,53 +341,43 @@ export class BlinkLightningProvider implements LightningProvider {
     const url = this.requireEnv("BLINK_API_URL");
     const apiKey = this.requireEnv("BLINK_API_KEY");
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-KEY": apiKey,
-      },
-      body: JSON.stringify({ query, variables }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-KEY": apiKey,
+        },
+        body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        throw new GatewayTimeoutException("Lightning provider timed out");
+      }
+      throw new ServiceUnavailableException("Lightning provider is unavailable");
+    }
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(
-        `Blink HTTP error ${response.status}: ${text || response.statusText}`,
-      );
+      throw new ServiceUnavailableException("Lightning provider request failed");
     }
 
     const body = (await response.json()) as GraphqlResponse<T>;
     if (body.errors && body.errors.length > 0) {
-      const message = body.errors.map((err) => err.message).join("; ");
-      throw new Error(`Blink GraphQL error: ${message}`);
+      throw new ServiceUnavailableException("Lightning provider request failed");
     }
     if (!body.data) {
-      throw new Error("Blink GraphQL response did not include data");
+      throw new ServiceUnavailableException("Lightning provider returned an empty response");
     }
     return body.data;
-  }
-
-  private isLiveMode(): boolean {
-    return Boolean(process.env.BLINK_API_KEY && process.env.BLINK_API_URL);
   }
 
   private requireEnv(name: string): string {
     const value = process.env[name];
     if (!value) {
-      throw new Error(`Missing required environment variable: ${name}`);
+      throw new ServiceUnavailableException("Lightning provider is not configured");
     }
     return value;
-  }
-
-  private mockInvoice(
-    input: CreateLightningInvoiceInput,
-  ): CreateLightningInvoiceOutput {
-    const paymentHash = `blink_${Math.random().toString(36).slice(2, 14)}`;
-    return {
-      paymentRequest: `lnbc${input.amount}n1p${paymentHash}blink`,
-      paymentHash,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    };
   }
 }

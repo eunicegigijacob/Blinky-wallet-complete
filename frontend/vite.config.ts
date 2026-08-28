@@ -8,7 +8,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      port
-    }
+      port,
+      host: "0.0.0.0",
+    },
   };
 });

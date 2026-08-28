@@ -8,26 +8,30 @@ import {
   Post,
   Req,
 } from "@nestjs/common";
-import { BlinkWebhookPayload, WebhooksService } from "./webhooks.service";
+import { ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { BlinkWebhookDto } from "./dto/blink-webhook.dto";
+import { WebhooksService } from "./webhooks.service";
 
+@ApiTags("webhooks")
 @Controller("webhooks/blink")
 export class WebhooksController {
   private readonly logger = new Logger(WebhooksController.name);
 
   constructor(private readonly webhooksService: WebhooksService) {}
 
-  /**
-   * Receive a Blink webhook event.
-   */
   @Post()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Receive Blink (Svix) payment webhooks" })
+  @ApiOkResponse({
+    description: "Webhook acknowledged. Duplicate events return status=duplicate.",
+  })
   async receive(
-    @Body() payload: BlinkWebhookPayload,
+    @Body() payload: BlinkWebhookDto,
     @Headers() headers: Record<string, string | string[] | undefined>,
     @Req() req?: { rawBody?: Buffer },
   ) {
     this.logger.log(
-      `Received Blink webhook eventType=${payload?.eventType ?? "unknown"} txId=${payload?.transaction?.id ?? payload?.id ?? "?"}`,
+      `Received Blink webhook eventType=${payload?.eventType ?? "unknown"}`,
     );
     const rawBody =
       req?.rawBody instanceof Buffer ? req.rawBody.toString("utf8") : undefined;

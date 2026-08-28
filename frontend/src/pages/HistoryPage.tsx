@@ -6,6 +6,16 @@ import { StatusBadge } from "../components/StatusBadge";
 import { api } from "../lib/api";
 import { InvoiceRecord, WalletBalance } from "../types";
 
+function formatDate(value?: string) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString();
+}
+
+function shortenInvoice(value: string) {
+  if (value.length <= 24) return value;
+  return `${value.slice(0, 12)}…${value.slice(-8)}`;
+}
+
 export function HistoryPage() {
   const [records, setRecords] = useState<InvoiceRecord[]>([]);
   const [walletBalance, setWalletBalance] = useState<WalletBalance | null>(null);
@@ -15,7 +25,7 @@ export function HistoryPage() {
   useEffect(() => {
     let mounted = true;
     api
-      .listTransfers()
+      .listPayments()
       .then((data) => mounted && setRecords(data))
       .catch(() => mounted && setRecords([]))
       .finally(() => mounted && setLoading(false));
@@ -38,7 +48,7 @@ export function HistoryPage() {
           <p className="text-xs uppercase tracking-[0.25em] text-indigo-300">Activity</p>
           <h1 className="text-2xl font-semibold">Transactions</h1>
           <p className="text-sm text-slate-400">
-            Your most recent invoices and their settlement status.
+            Date, amount, status, and invoice for recent Lightning payments.
           </p>
         </header>
 
@@ -54,10 +64,11 @@ export function HistoryPage() {
           ) : walletBalance ? (
             <>
               <p className="mt-2 text-3xl font-semibold text-emerald-300">
-                {walletBalance.balance.toLocaleString()} sats
+                {walletBalance.balance.toLocaleString()}{" "}
+                {walletBalance.walletCurrency === "USD" ? "cents" : "sats"}
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Wallet {walletBalance.walletId} • {walletBalance.walletCurrency} • {walletBalance.mode}
+                {walletBalance.walletCurrency} • {walletBalance.mode}
               </p>
             </>
           ) : (
@@ -69,7 +80,7 @@ export function HistoryPage() {
           {loading ? (
             <p className="text-sm text-slate-400">Loading history…</p>
           ) : records.length === 0 ? (
-            <p className="text-sm text-slate-400">No transfers found yet.</p>
+            <p className="text-sm text-slate-400">No payments found yet.</p>
           ) : (
             <motion.div
               variants={staggerContainer}
@@ -77,20 +88,27 @@ export function HistoryPage() {
               animate="show"
               className="space-y-3"
             >
+              <div className="hidden grid-cols-[1.2fr_0.7fr_0.6fr_minmax(0,1.4fr)] gap-3 px-4 text-[11px] uppercase tracking-widest text-slate-500 md:grid">
+                <span>Date</span>
+                <span>Amount</span>
+                <span>Status</span>
+                <span>Invoice</span>
+              </div>
               {records.map((record) => (
                 <motion.div key={record.invoiceId} variants={staggerItem}>
                   <Link
                     to={`/invoice/${record.invoiceId}`}
-                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/30 px-4 py-3 transition-colors duration-200 hover:border-indigo-500/40 hover:bg-slate-900/60"
+                    className="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/30 px-4 py-3 transition-colors duration-200 hover:border-indigo-500/40 hover:bg-slate-900/60 md:grid-cols-[1.2fr_0.7fr_0.6fr_minmax(0,1.4fr)] md:items-center"
                   >
                     <div>
-                      <p className="text-sm font-medium">{record.memo}</p>
-                      <p className="text-xs text-slate-400">{record.invoiceId}</p>
+                      <p className="text-sm font-medium">{formatDate(record.createdAt)}</p>
+                      <p className="text-xs text-slate-400">{record.memo}</p>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm">{record.amount.toLocaleString()} sats</span>
-                      <StatusBadge status={record.status} />
-                    </div>
+                    <span className="text-sm">{record.amount.toLocaleString()} sats</span>
+                    <StatusBadge status={record.status} />
+                    <span className="font-mono text-xs text-slate-400">
+                      {shortenInvoice(record.paymentRequest)}
+                    </span>
                   </Link>
                 </motion.div>
               ))}
